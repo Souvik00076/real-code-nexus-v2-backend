@@ -9,11 +9,14 @@ export type Room = {
 export interface IRoom extends Room, Document { }
 
 const roomSchema = new Schema<IRoom>({
-  users: [{
-    type: Schema.Types.ObjectId,
-    ref: 'users',
-    required: true
-  }],
+  users: {
+    type: [{
+      type: Schema.Types.ObjectId,
+      ref: 'users',
+      required: true
+    }],
+    default: []
+  },
   contents: {
     type: Schema.Types.Mixed
   },

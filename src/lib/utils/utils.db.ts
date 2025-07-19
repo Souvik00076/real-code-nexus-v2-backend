@@ -1,5 +1,7 @@
+import { BadRequest } from "lib/error/error.bad_request";
 import { Room } from "../schema/schema.room";
-import { User } from "../schema/schema.user";
+import { IUser, User } from "../schema/schema.user";
+import { Forbidden } from "lib/error/error.forbidden";
 
 export async function checkIfRoomExist(roomId: string): Promise<boolean> {
   try {
@@ -36,4 +38,15 @@ export async function addUserToRoom(userName: string, roomId: string): Promise<b
   } catch (error) {
     return false;
   }
+}
+
+export async function createUser(userName: string): Promise<IUser> {
+
+  const userInfo = await User.findOne({ user_name: userName });
+  if (!userInfo) {
+    return await User.insertOne({
+      user_name: userName
+    })
+  }
+  return userInfo
 }
