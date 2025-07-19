@@ -1,6 +1,7 @@
 import { WebSocketServer } from "ws";
 import { IncomingMessage, Server } from 'http'
 import { Duplex } from "stream";
+import { addUserToRoom, checkIfRoomExist } from "../lib/utils/utils.db";
 
 export class WebsocketServer {
   private static app: WebSocketServer;
@@ -8,23 +9,32 @@ export class WebsocketServer {
     if (!this.app) {
       const wss = new WebSocketServer({
         noServer: true,
-        path: "/sockets"
-      });
-      httpServer.on("upgrade", (request: IncomingMessage, socket: Duplex, head: Buffer) => {
-        console.log("came here");
-        console.log("Request URL:", request.url);
-        if (request.url === '/sockets') {
-          wss.handleUpgrade(request, socket, head, (websocket) => {
-            wss.emit("connection", websocket, request);
-          });
-        } else {
-          socket.destroy();
-        }
+        path: "/ws"
       });
 
-      // Handle WebSocket connections
+      httpServer.on("upgrade", async (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+        const url = new URL(request.url || "", `http://${request.headers.host}`);
+        const roomId = url.searchParams.get("roomId");
+        const userName = request.headers["authorization"]
+        if (!roomId || url.pathname !== "/ws" || !userName) {
+          socket.destroy(); // silently close the connection
+          return;
+        }
+        const isRoomExist = await checkIfRoomExist(roomId);
+        if (!isRoomExist) {
+          socket.destroy();
+          return;
+        }
+        const isAdded = await addUserToRoom(roomId, userName);
+        if (!isAdded) {
+          socket.destroy();
+          return;
+        }
+        wss.handleUpgrade(request, socket, head, (websocket) => {
+          wss.emit("connection", websocket, request);
+        });
+      });
       wss.on('connection', (ws, request) => {
-        console.log('New WebSocket connection established');
         ws.on('message', (message) => {
           console.log('Received message:', message.toString());
           ws.send(`Echo: ${message}`);
