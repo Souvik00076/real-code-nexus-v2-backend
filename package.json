@@ -3,11 +3,13 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
-    "dev": "bun index.ts"
+    "dev": "bun --watch ./src/app.ts"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
-    "bun-types": "latest"
+    "@types/mongoose": "^5.11.97",
+    "bun-types": "latest",
+    "prettier": "3.6.2"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
@@ -16,6 +18,7 @@
     "@sinclair/typebox": "^0.34.37",
     "@types/ws": "^8.18.1",
     "express": "^5.1.0",
+    "mongoose": "^8.16.3",
     "ws": "^8.18.3"
   }
 }
