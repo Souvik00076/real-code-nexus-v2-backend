@@ -1,7 +1,11 @@
 import { WebSocketServer } from "ws";
 import { IncomingMessage, Server } from 'http'
 import { Duplex } from "stream";
-import { addUserToRoom, checkIfRoomExist } from "../lib/utils/utils.db";
+import { addUserToRoom, checkIfRoomExist, checkIfUserExistById } from "../lib/utils/utils.db";
+import { RoomManager } from "lib/room";
+import { websocketService } from "lib/services/services.ws";
+import { WsResponse } from "types";
+import { WsCommand } from "types/dto";
 
 export class WebsocketServer {
   private static app: WebSocketServer;
@@ -15,8 +19,8 @@ export class WebsocketServer {
       httpServer.on("upgrade", async (request: IncomingMessage, socket: Duplex, head: Buffer) => {
         const url = new URL(request.url || "", `http://${request.headers.host}`);
         const roomId = url.searchParams.get("roomId");
-        const userName = request.headers["authorization"]
-        if (!roomId || url.pathname !== "/ws" || !userName) {
+        const userId = url.searchParams.get("authorization")
+        if (!roomId || url.pathname !== "/ws" || !userId) {
           socket.destroy(); // silently close the connection
           return;
         }
@@ -25,21 +29,44 @@ export class WebsocketServer {
           socket.destroy();
           return;
         }
-        const isAdded = await addUserToRoom(roomId, userName);
-        if (!isAdded) {
+        const isUser = await checkIfUserExistById(userId);
+        if (!isUser) {
           socket.destroy();
           return;
         }
+        (request as any).userId = userId;
+        (request as any).roomId = roomId;
         wss.handleUpgrade(request, socket, head, (websocket) => {
           wss.emit("connection", websocket, request);
         });
       });
       wss.on('connection', (ws, request) => {
+        const userId = (request as any).userId as string;
+        const roomId = (request as any).roomId as string;
+        websocketService({
+          userId,
+          roomId,
+          ws,
+          type: "USER_ADD" as any
+        });
         ws.on('message', (message) => {
-          console.log('Received message:', message.toString());
-          ws.send(`Echo: ${message}`);
+          let result: WsResponse = {
+            success: false,
+            message: "Failed To Send"
+          }
+          try {
+            const data = { userId, roomId, ...JSON.parse(message.toString()) };
+            const flag = websocketService(data);
+            result.success = flag;
+            result.message = "OK"
+          } catch (error) {
+            console.log("validation error in wscommand")
+          }
+          ws.send(JSON.stringify(result));
         });
         ws.on('close', () => {
+          const data = { userId, roomId, type: "TERMINATE" as any };
+          websocketService(data);
           console.log('WebSocket connection closed');
         });
       });

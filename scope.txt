@@ -1,0 +1,13 @@
+Works : 
+
+WebSocket : 
+1)Include userName.
+2)Test websocket.
+3)Handle client pong.
+4)Handle server pong.
+Rest API : 
+1)Endpoint for getting room contents.
+2)Endpoint for getting all the users in a room.
+
+Extra : 
+7)Study on Opereational Transformation.
