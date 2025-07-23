@@ -2,7 +2,7 @@ import { BadRequest } from "lib/error/error.bad_request";
 import { Room } from "../schema/schema.room";
 import { IUser, User } from "../schema/schema.user";
 import { Forbidden } from "lib/error/error.forbidden";
-import { Types } from "mongoose";
+import { isValidObjectId, Types } from "mongoose";
 
 export async function checkIfRoomExist(roomId: string): Promise<boolean> {
   try {
@@ -18,13 +18,29 @@ export async function checkIfRoomExist(roomId: string): Promise<boolean> {
 
 export async function checkIfUserExist(userName: string) {
   try {
-    const userInfo = await User.findOne({ userName });
+    const userInfo = await User.findOne({ userName }).lean();
     if (!userInfo) {
       throw new Error("user does not exist");
     }
     return true;
   } catch (error) {
     return false;
+  }
+}
+
+export async function findUserById(userId: string): Promise<User | null> {
+
+  try {
+    if (!isValidObjectId(userId)) {
+      throw new Error("Invalid userId")
+    }
+    const userInfo = await User.findById(new Types.ObjectId(userId)).lean();
+    if (!userInfo) {
+      throw new Error("user does not exist")
+    }
+    return userInfo
+  } catch (error) {
+    return null;
   }
 }
 

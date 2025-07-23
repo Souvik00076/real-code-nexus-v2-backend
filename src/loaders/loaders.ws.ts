@@ -1,7 +1,7 @@
 import { WebSocketServer } from "ws";
 import { IncomingMessage, Server } from 'http'
 import { Duplex } from "stream";
-import { addUserToRoom, checkIfRoomExist, checkIfUserExistById } from "../lib/utils/utils.db";
+import { addUserToRoom, checkIfRoomExist, checkIfUserExistById, findUserById } from "../lib/utils/utils.db";
 import { RoomManager } from "lib/room";
 import { websocketService } from "lib/services/services.ws";
 import { WsResponse } from "types";
@@ -29,13 +29,14 @@ export class WebsocketServer {
           socket.destroy();
           return;
         }
-        const isUser = await checkIfUserExistById(userId);
-        if (!isUser) {
+        const userInfo = await findUserById(userId);
+        if (!userInfo) {
           socket.destroy();
           return;
         }
         (request as any).userId = userId;
         (request as any).roomId = roomId;
+        (request as any).userName = userInfo.user_name;
         wss.handleUpgrade(request, socket, head, (websocket) => {
           wss.emit("connection", websocket, request);
         });
@@ -43,9 +44,11 @@ export class WebsocketServer {
       wss.on('connection', (ws, request) => {
         const userId = (request as any).userId as string;
         const roomId = (request as any).roomId as string;
+        const userName = (request as any).user_name as string;
         websocketService({
           userId,
           roomId,
+          userName,
           ws,
           type: "USER_ADD" as any
         });

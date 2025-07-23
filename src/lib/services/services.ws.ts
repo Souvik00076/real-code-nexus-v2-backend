@@ -7,11 +7,16 @@ const validator = validateRequest<WsCommand>(WsCommand);
 function sendDelta(data: WsCommand) {
   const { content, userId, roomId } = data;
   if (!content) return false;
+  const userInfo = RoomManager.getUserInfo(roomId, userId);
+  if (!userInfo) return false;
   const delta = {
     type: "DELTA",
-    content: content
+    content: JSON.stringify({
+      content,
+      senderId: userId,
+      senderName: userInfo.userName
+    })
   };
-  console.log(delta);
   RoomManager.broadcast(roomId, JSON.stringify(delta), userId);
   return true;
 }
@@ -22,11 +27,7 @@ function exitRoom(data: WsCommand) {
     type: "TERMINATE_LEFT",
     content: "Successfully exited room"
   };
-  RoomManager.removeUser(roomId, userId, JSON.stringify(delta));
-  RoomManager.broadcast(roomId, JSON.stringify({
-    userId,
-    type: "EXIT_ROOM"
-  }));
+  RoomManager.removeUser(roomId, userId, "TERMINATE_LEFT", JSON.stringify(delta));
   return true;
 }
 
@@ -40,22 +41,14 @@ function terminateUser(data: WsCommand) {
     type: "TERMINATE",
     content: "Admin Removed"
   };
-  RoomManager.removeUser(roomId, jsonContent.userId, JSON.stringify(delta));
-  RoomManager.broadcast(roomId, JSON.stringify({
-    type: "TERMINATE",
-    userId: jsonContent.userId
-  }))
+  RoomManager.removeUser(roomId, jsonContent.userId, "TERMINATE", JSON.stringify(delta));
   return true;
 }
 
 export function addUser(data: WsCommand) {
-  const { roomId, userId, ws } = data;
+  const { roomId, userId, ws, userName } = data;
   if (!ws) return false;
-  RoomManager.addUser(roomId, userId, ws);
-  RoomManager.broadcast(roomId, JSON.stringify({
-    type: "NEW_USER",
-    userId
-  }))
+  RoomManager.addUser(roomId, userId, userName!, ws);
   return true;
 }
 export function websocketService(data: WsCommand) {

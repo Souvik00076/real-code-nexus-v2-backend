@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 
 export type RoomSocketUserInfo = {
   userId: string;
+  userName: string;
   socket: WebSocket;
   lastHeartBeat: number;
   lastPingSent?: number;
@@ -92,7 +93,7 @@ export class RoomManager {
     return this.rooms.get(roomId)!;
   }
   /** Add a user to a room */
-  public static addUser(roomId: string, userId: string, socket: WebSocket): void {
+  public static addUser(roomId: string, userId: string, userName: string, socket: WebSocket): void {
     const room = this.getOrCreateRoom(roomId);
     const existingUser = room.users.get(userId);
     // Close existing connection if user reconnects
@@ -107,14 +108,20 @@ export class RoomManager {
     const isOwner = room.users.size === 0;
     room.users.set(userId, {
       userId,
+      userName,
       socket,
       lastHeartBeat: Date.now(),
       isOwner
     });
+    this.broadcast(roomId, JSON.stringify({
+      type: "NEW_USER",
+      userId,
+      userName
+    }))
     console.log(`User ${userId} ${isOwner ? '(owner)' : ''} added to room ${roomId}`);
   }
   /** Remove a user from a room */
-  public static removeUser(roomId: string, userId: string, reason?: string): void {
+  public static removeUser(roomId: string, userId: string, type: string, reason?: string): void {
     const room = this.rooms.get(roomId);
     if (!room) return;
     const user = room.users.get(userId);
@@ -122,11 +129,16 @@ export class RoomManager {
       try {
         if (user.socket.readyState === WebSocket.OPEN) {
           user.socket.close(1000, reason || "User removed");
+          room.users.delete(userId);
+          this.broadcast(roomId, JSON.stringify({
+            userId,
+            userName: user.userName,
+            type
+          }))
         }
       } catch (error) {
         console.warn(`Error closing socket for user ${userId}:`, error);
       }
-      room.users.delete(userId);
       console.log(`User ${userId} removed from room ${roomId}: ${reason || 'No reason'}`);
     }
     // Remove empty room
@@ -261,7 +273,14 @@ export class RoomManager {
       console.log(`Cleanup completed: ${cleanedUsers} users removed, ${cleanedRooms} rooms deleted`);
     }
   }
-  public static isOwner(userId: string, roomId: string): boolean  {
+  public static getUserInfo(roomId: string, userId: string) {
+    if (!roomId || !userId) return null;
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+    const user = room.users.get(userId);
+    return user;
+  }
+  public static isOwner(userId: string, roomId: string): boolean {
     const room = this.rooms.get(roomId);
     if (!room) return false;
     const userInfo = room.users.get(userId);

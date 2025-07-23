@@ -14,6 +14,7 @@ export const WsCommand = Type.Object({
   content: Type.Optional(Type.String()),
   command: Type.Optional(Type.String()),
   userId: Type.String(),
+  userName: Type.Optional(Type.String()),
   roomId: Type.String(),
   ws: Type.Optional(Type.Any())
 })
