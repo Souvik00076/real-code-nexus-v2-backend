@@ -51,6 +51,15 @@ export function addUser(data: WsCommand) {
   return flag;
 }
 
+function handleClientPong(data: WsCommand) {
+  const { roomId, userId } = data;
+  const flag = RoomManager.handlePong({
+    roomId,
+    userId
+  })
+  return flag;
+}
+
 export function websocketService(data: WsCommand) {
   const { type } = validator.verify(data);
   let result: boolean = false;
@@ -66,6 +75,9 @@ export function websocketService(data: WsCommand) {
     }
     if (type === "USER_ADD") {
       result = addUser(data);
+    }
+    if (type === "PONG") {
+      result = handleClientPong(data);
     }
   } catch (error) {
     return false;

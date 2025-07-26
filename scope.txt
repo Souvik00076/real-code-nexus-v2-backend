@@ -1,8 +1,7 @@
 WebSocket : 
-1)Include userName.(C)
-2)Test websocket.(30 minutes + 30 minutes debugging)
-3)Handle client pong.(1 hour max)
 4)Handle server pong.(1 hour max)
+  Server sends a ping.
+  Client sends a pong.
 5)Endpoint for getting room contents.(15 minutes)
 6)Endpoint for getting all the users in a room.(15 minutes)
 7)Learn Nginx.(Half Day)

@@ -3,9 +3,16 @@ import { IPost } from "./controller.base";
 import { postAppServices } from "lib/services/services.app";
 import { sendSuccessResponse } from "lib/utils/utils.response_handler";
 
-export class AppController implements IPost {
+export class AppController implements IPost, IGet {
   constructor() {
     this.post = this.post.bind(this);
+  }
+  async get(req: Request, res: Response, next: NextFunction) {
+    try {
+
+    } catch (error) {
+
+    }
   }
   async post(req: Request, res: Response, next: NextFunction) {
     try {

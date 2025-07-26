@@ -2,15 +2,16 @@ import { Type, type Static } from "@sinclair/typebox";
 
 export type AppDto = Static<typeof AppDto>;
 export const AppDto = Type.Object({
-  user_name: Type.String(),
+  user_name: Type.Optional(Type.String()),
   type: Type.String(),
+  room_id: Type.Optional(Type.Number())
   //email: Type.String({ format: "email" })
 });
 
 
 export type WsCommand = Static<typeof WsCommand>
 export const WsCommand = Type.Object({
-  type: Type.Union([Type.Literal('DELTA'), Type.Literal('TERMINATE'), Type.Literal('USER_REMOVE'), Type.Literal('USER_ADD')]),
+  type: Type.Union([Type.Literal('DELTA'), Type.Literal('TERMINATE'), Type.Literal('USER_REMOVE'), Type.Literal('USER_ADD'), Type.Literal("PONG")]),
   content: Type.Optional(Type.String()),
   command: Type.Optional(Type.String()),
   userId: Type.String(),

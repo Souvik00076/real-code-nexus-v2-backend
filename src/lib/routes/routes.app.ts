@@ -7,6 +7,8 @@ export class AppRouter extends BaseRouter {
   }
   protected initializeRoutes(): void {
     const router = this.getRouter();
-    router.post('/', new AppController().post);
+    const controller = new AppController();
+    router.post('/', controller.post);
+    router.get('/room_id/contents', controller.get);
   }
 }
