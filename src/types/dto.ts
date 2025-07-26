@@ -19,4 +19,22 @@ export const WsCommand = Type.Object({
   ws: Type.Optional(Type.Any())
 })
 
+export type RoomCommand = Static<typeof RoomCommand>;
+export const RoomCommand = Type.Object({
+  senderId: Type.Optional(Type.String()),
+  roomId: Type.String(),
+  content: Type.Optional(Type.String()),
+  userId: Type.Optional(Type.String()),
+  excludeUserId: Type.Optional(Type.String()),
+  timestamp: Type.Optional(Type.Number()),
+  reason: Type.Optional(Type.String()),
+  socket: Type.Optional(Type.Any()),
+  userName: Type.Optional(Type.String()),
+  terminateType: Type.Optional(Type.Union([
+    Type.Literal("LEFT"),
+    Type.Literal("REMOVED"),
+    Type.Literal("ERROR")
+  ]))
+})
+
 

@@ -1,4 +1,7 @@
+import { ValidatorRequestReturn } from "types";
+import { RoomCommand } from "types/dto";
 import { WebSocket } from "ws";
+import { validateRequest } from "./utils/utils.validation";
 
 export type RoomSocketUserInfo = {
   userId: string;
@@ -9,27 +12,23 @@ export type RoomSocketUserInfo = {
   isOwner: boolean;
 };
 export type RoomInfo = {
-  users: Map<string, RoomSocketUserInfo>; // key: userId
-  contents: any; // e.g., shared document/code etc.
+  users: Map<string, RoomSocketUserInfo>;
+  contents: any;
 };
 
 export class RoomManager {
   private static rooms: Map<string, RoomInfo> = new Map();
   private static heartbeatInterval: NodeJS.Timeout | null = null;
   private static pingInterval: NodeJS.Timeout | null = null;
+  private static validator: ValidatorRequestReturn<RoomCommand> = validateRequest<RoomCommand>(RoomCommand);
 
   public static initialize() {
     this.startPing();
     this.startHeartBeatCleanup();
   }
-
   public static close() {
     this.stopAllIntervals();
   }
-  /**
-   * Start sending pings to all connected users
-   * @param intervalMs How often to send pings (default: 30 seconds)
-   */
   private static startPing(intervalMs = 30_000): void {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
@@ -40,11 +39,6 @@ export class RoomManager {
     }, intervalMs);
     console.log(`Ping interval started - sending pings every ${intervalMs}ms`);
   }
-  /**
-   * Start cleanup process for inactive users
-   * @param intervalMs How often to check for inactive users (default: 15 seconds)
-   * @param timeoutMs How long to wait before considering user inactive (default: 60 seconds)
-   */
   private static startHeartBeatCleanup(intervalMs = 15_000, timeoutMs = 60_000): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
@@ -54,9 +48,6 @@ export class RoomManager {
     }, intervalMs);
     console.log(`Heartbeat cleanup started - checking every ${intervalMs}ms, timeout ${timeoutMs}ms`);
   }
-  /**
-   * Stop ping interval
-   */
   private static stopPing(): void {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
@@ -64,9 +55,6 @@ export class RoomManager {
       console.log('Ping interval stopped');
     }
   }
-  /**
-   * Stop heartbeat cleanup
-   */
   private static stopHeartBeatCleanup(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
@@ -74,15 +62,10 @@ export class RoomManager {
       console.log('Heartbeat cleanup stopped');
     }
   }
-  /**
-   * Stop all intervals (for graceful shutdown)
-   */
   private static stopAllIntervals(): void {
     this.stopPing();
     this.stopHeartBeatCleanup();
   }
-
-  /** Create or get an existing room */
   private static getOrCreateRoom(roomId: string): RoomInfo {
     if (!this.rooms.has(roomId)) {
       this.rooms.set(roomId, {
@@ -92,8 +75,9 @@ export class RoomManager {
     }
     return this.rooms.get(roomId)!;
   }
-  /** Add a user to a room */
-  public static addUser(roomId: string, userId: string, userName: string, socket: WebSocket): void {
+  public static addUser(data: RoomCommand): boolean {
+    const { roomId, userId, userName, socket } = this.validator.verify(data);
+    if (!userId || !userName || !socket) return false;
     const room = this.getOrCreateRoom(roomId);
     const existingUser = room.users.get(userId);
     // Close existing connection if user reconnects
@@ -102,6 +86,7 @@ export class RoomManager {
         existingUser.socket.close(1000, "User reconnected");
       } catch (error) {
         console.warn(`Error closing existing socket for user ${userId}:`, error);
+        return false;
       }
     }
     // Check if this should be the room owner (first user)
@@ -113,44 +98,91 @@ export class RoomManager {
       lastHeartBeat: Date.now(),
       isOwner
     });
-    this.broadcast(roomId, JSON.stringify({
-      type: "NEW_USER",
-      userId,
-      userName
-    }))
+    this.broadcast({
+      roomId,
+      content: JSON.stringify(
+        {
+          userId,
+          userName,
+          type: "NEW_USER"
+        }
+      ),
+      excludeUserId: userId
+    } as RoomCommand)
     console.log(`User ${userId} ${isOwner ? '(owner)' : ''} added to room ${roomId}`);
+    return true;
   }
-  /** Remove a user from a room */
-  public static removeUser(roomId: string, userId: string, type: string, reason?: string): void {
+  public static removeUser(data: RoomCommand): boolean {
+    const { roomId, userId } = this.validator.verify(data);
+    if (!roomId || !userId) return false;
     const room = this.rooms.get(roomId);
-    if (!room) return;
+    if (!room) return false;
     const user = room.users.get(userId);
+    if (!user) return false;
     if (user) {
       try {
         if (user.socket.readyState === WebSocket.OPEN) {
-          user.socket.close(1000, reason || "User removed");
-          room.users.delete(userId);
-          this.broadcast(roomId, JSON.stringify({
+          user.socket.close(1000, "User removed");
+        }
+        room.users.delete(userId);
+        this.broadcast({
+          roomId,
+          userName: user.userName,
+          content: JSON.stringify({
+            content: `${user.userName} has left the room`,
             userId,
             userName: user.userName,
-            type
-          }))
-        }
+            type: "LEFT"
+          })
+        } as RoomCommand)
+
       } catch (error) {
         console.warn(`Error closing socket for user ${userId}:`, error);
       }
-      console.log(`User ${userId} removed from room ${roomId}: ${reason || 'No reason'}`);
     }
     // Remove empty room
     if (room.users.size === 0) {
       this.rooms.delete(roomId);
       console.log(`Room ${roomId} deleted (empty)`);
     }
+    return true;
   }
-  /** 
-   * Handle pong response from client (updates heartbeat)
-   */
-  public static handlePong(roomId: string, userId: string, timestamp?: number): void {
+  public static terminateUser(data: RoomCommand): boolean {
+    const { roomId, userId, excludeUserId } = this.validator.verify(data);
+    if (!roomId || !userId || !excludeUserId) return false;
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+    const isOwner = this.isOwner(data);
+    if (!isOwner) return false;
+    const user = room.users.get(excludeUserId);
+    if (!user) return false;
+    if (user) {
+      try {
+        if (user.socket.readyState === WebSocket.OPEN) {
+          user.socket.close(1000, "User removed");
+        }
+        room.users.delete(userId);
+        this.broadcast({
+          roomId,
+          userName: user.userName,
+          content: JSON.stringify({
+            content: `${user.userName} removed by admin`,
+            type: "REMOVED",
+            userId: user.userId,
+            userName: user.userName
+          })
+        } as RoomCommand)
+
+      } catch (error) {
+        //console.warn(`Error closing socket for user ${userId}:`, error);
+      }
+    }
+
+    return false;
+  }
+  public static handlePong(data: RoomCommand): void {
+    const { roomId, userId } = this.validator.verify(data);
+    if (!roomId || !userId) return;
     const room = this.rooms.get(roomId);
     if (!room) return;
     const user = room.users.get(userId);
@@ -159,10 +191,9 @@ export class RoomManager {
       delete user.lastPingSent;
     }
   }
-  /** 
-   * Update heartbeat manually (for other message types)
-   */
-  private static updateHeartbeat(roomId: string, userId: string): void {
+  private static updateHeartbeat(data: RoomCommand): void {
+    const { roomId, userId } = this.validator.verify(data);
+    if (!roomId || !userId) return;
     const room = this.rooms.get(roomId);
     if (!room) return;
     const user = room.users.get(userId);
@@ -170,21 +201,20 @@ export class RoomManager {
       user.lastHeartBeat = Date.now();
     }
   }
-
-  /** Broadcast a message to all users in a room */
-  public static broadcast(roomId: string, data: string, excludeUserId?: string): void {
+  private static broadcast(data: RoomCommand): void {
+    const { roomId, content, excludeUserId } = this.validator.verify(data);
+    if (!roomId || !content) return;
     const room = this.rooms.get(roomId);
     if (!room) return;
     let sentCount = 0;
     let failedCount = 0;
-
     for (const [currentUserId, { socket }] of room.users.entries()) {
       if (excludeUserId && currentUserId === excludeUserId) {
         continue;
       }
       try {
         if (socket.readyState === WebSocket.OPEN) {
-          socket.send(data);
+          socket.send(content);
           sentCount++;
         } else {
           failedCount++;
@@ -198,18 +228,17 @@ export class RoomManager {
       console.warn(`Broadcast to room ${roomId}: ${sentCount} sent, ${failedCount} failed`);
     }
   }
-
-  private static getRoomContents(roomId: string): any {
+  private static getRoomContents(data: RoomCommand): any {
+    const { roomId } = this.validator.verify(data);
+    if (!roomId) return;
     return this.rooms.get(roomId)?.contents;
   }
-
-  private static setRoomContents(roomId: string, contents: any): void {
+  private static setRoomContents(data: RoomCommand): void {
+    const { roomId, content } = this.validator.verify(data);
+    if (!roomId || !content) return;
     const room = this.getOrCreateRoom(roomId);
-    room.contents = contents;
+    room.contents = content;
   }
-  /**
-   * Send ping to all users in all rooms
-   */
   private static sendPingToAllUsers(): void {
     const timestamp = Date.now();
     let totalPingsSent = 0;
@@ -238,9 +267,6 @@ export class RoomManager {
       console.log(`Pings sent: ${totalPingsSent}, failed: ${totalPingsFailed}`);
     }
   }
-  /**
-   * Clean up inactive users based on heartbeat timeout
-   */
   private static cleanupInactiveUsers(timeout = 60_000): void {
     const now = Date.now();
     let cleanedUsers = 0;
@@ -273,18 +299,44 @@ export class RoomManager {
       console.log(`Cleanup completed: ${cleanedUsers} users removed, ${cleanedRooms} rooms deleted`);
     }
   }
-  public static getUserInfo(roomId: string, userId: string) {
+  public static getUserInfo(data: RoomCommand) {
+    const { roomId, userId } = this.validator.verify(data);
     if (!roomId || !userId) return null;
     const room = this.rooms.get(roomId);
     if (!room) return null;
     const user = room.users.get(userId);
     return user;
   }
-  public static isOwner(userId: string, roomId: string): boolean {
+  public static isOwner(data: RoomCommand): boolean {
+    const { roomId, userId } = this.validator.verify(data);
+    if (!userId) return false;
     const room = this.rooms.get(roomId);
     if (!room) return false;
     const userInfo = room.users.get(userId);
     if (!userInfo) return false;
     return userInfo.isOwner;
+  }
+  public static sendContent(data: RoomCommand): boolean {
+    const { senderId, roomId, content } = this.validator.verify(data);
+    if (!senderId || !roomId || !content) {
+      return false;
+    }
+    const room = this.rooms.get(roomId)!;
+    if (!room) return false;
+    const user = room.users.get(senderId);
+    if (!user) return false;
+    if (!content) return false;
+    const delta = {
+      type: "DELTA",
+      content,
+      senderId,
+      senderName: user.userName
+    };
+    this.broadcast({
+      roomId,
+      content: JSON.stringify(delta),
+      excludeUserId: senderId
+    });
+    return true;
   }
 }

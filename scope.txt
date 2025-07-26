@@ -1,13 +1,17 @@
-Works : 
-
 WebSocket : 
-1)Include userName.
-2)Test websocket.
-3)Handle client pong.
-4)Handle server pong.
-Rest API : 
-1)Endpoint for getting room contents.
-2)Endpoint for getting all the users in a room.
+1)Include userName.(C)
+2)Test websocket.(30 minutes + 30 minutes debugging)
+3)Handle client pong.(1 hour max)
+4)Handle server pong.(1 hour max)
+5)Endpoint for getting room contents.(15 minutes)
+6)Endpoint for getting all the users in a room.(15 minutes)
+7)Learn Nginx.(Half Day)
+8)Setup Docker.(2 hours)
+9)Implement Nignx load balancer with Docker.(1 day)
+10)Writing the CI/CD Pipeline.
+
+Deadline : 28/07/2025 Monday
+
 
 Extra : 
 7)Study on Opereational Transformation.

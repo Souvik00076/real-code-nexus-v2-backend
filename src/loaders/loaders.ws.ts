@@ -44,7 +44,7 @@ export class WebsocketServer {
       wss.on('connection', (ws, request) => {
         const userId = (request as any).userId as string;
         const roomId = (request as any).roomId as string;
-        const userName = (request as any).user_name as string;
+        const userName = (request as any).userName as string;
         websocketService({
           userId,
           roomId,
@@ -58,11 +58,12 @@ export class WebsocketServer {
             message: "Failed To Send"
           }
           try {
-            const data = { userId, roomId, ...JSON.parse(message.toString()) };
+            const data = { userId, roomId, userName, ...JSON.parse(message.toString()) };
             const flag = websocketService(data);
             result.success = flag;
             result.message = "OK"
           } catch (error) {
+            console.log(error);
             console.log("validation error in wscommand")
           }
           ws.send(JSON.stringify(result));
